@@ -1,0 +1,128 @@
+{% if vector_network_mode == "host" %}
+  {% set address=vector_publish_ip %}
+  {% set port_api=vector_publish_port %}
+{% else %}
+  {% set address="0.0.0.0" %}
+  {% set port_api="8686" %}
+{% endif %}
+
+api:
+  address: "{{ address }}:{{ port_api }}"
+  enabled: true
+
+sources:
+  journald:
+    type: "journald"
+    current_boot_only: true
+
+  docker:
+    type: "docker_logs"
+    retry_backoff_secs: 1
+
+  metrics_internal:
+    type: "internal_metrics"
+    scrape_interval_secs: 30
+
+  metrics_node_exporter:
+    type: prometheus_scrape
+    scrape_interval_secs: 30
+    endpoints:
+      - http://localhost:9100/metrics
+
+  metrics_cadvisor:
+    type: prometheus_scrape
+    scrape_interval_secs: 30
+    endpoints:
+      - http://localhost:8088/metrics
+
+{{ vector_t_sources_metrics|default('')|indent(width=2, first=True) }}
+
+# opentelemetry:
+#   type: "opentelemetry"
+#   grpc:
+#     address: "{{ address }}:4317"
+#   http:
+#     address: "{{ address }}:4318"
+#     keepalive:
+#       max_connection_age_jitter_factor: 0.1
+#       max_connection_age_secs: 300
+
+transforms:
+  t_metrics_internal:
+    type: remap
+    inputs:
+      - "metrics_internal"
+    source: |-
+      .tags.env = "{{ bundle_env|default(default_env) }}"
+      .tags.hostname = "{{ inventory_hostname }}"
+      .tags.instance = "{{ inventory_hostname }}"
+  t_metrics_node_exporter:
+    type: remap
+    inputs:
+      - "metrics_node_exporter"
+    source: |-
+      .tags.env = "{{ bundle_env|default(default_env) }}"
+      .tags.hostname = "{{ inventory_hostname }}"
+      .tags.instance = "{{ inventory_hostname }}:9100"
+  t_metrics_cadvisor:
+    type: remap
+    inputs:
+      - "metrics_cadvisor"
+    source: |-
+      .tags.env = "{{ bundle_env|default(default_env) }}"
+      .tags.hostname = "{{ inventory_hostname }}"
+      .tags.instance = "{{ inventory_hostname }}:8088"
+{% if vector_t_sources_metrics|default('') != '' %}
+{% for line in (vector_t_sources_metrics|default('')).splitlines() %}
+{% if line | regex_search('^metrics_.*:') %}
+  t_{{ line.split(':')[0] }}:
+    type: remap
+    inputs:
+      - "{{ line.split(':')[0] }}"
+    source: |-
+      .tags.env = "{{ bundle_env|default(default_env) }}"
+      .tags.hostname = "{{ inventory_hostname }}"
+{% for tag in line.split('#')[1].split(';') %}
+      {{ tag }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+sinks:
+  loki:
+    type: "loki"
+    inputs:
+      - "journald"
+      - "docker"
+    endpoint: "{{ vector_t_loki_endpoint|default('https://loki-gateway') }}"
+    encoding:
+      codec: "json"
+    out_of_order_action: "accept"
+    labels:
+      fqdn: "{{ inventory_hostname }}"
+    tls:
+      ca_file: "/tls/loki/ca.crt"
+      crt_file: "/tls/loki/tls.crt"
+      key_file: "/tls/loki/tls.key"
+      verify_certificate: true
+      verify_hostname: true
+
+  prometheus:
+    type: "prometheus_remote_write"
+    inputs:
+      - "t_metrics_internal"
+      - "t_metrics_node_exporter"
+      - "t_metrics_cadvisor"
+{% for line in (vector_t_sources_metrics|default('')).splitlines() %}
+{% if line | regex_search('^metrics_.*') %}
+      - "t_{{ line.split(':')[0] }}"
+{% endif %}
+{% endfor %}
+    endpoint: "{{ vector_t_loki_endpoint|default('https://prometheus-gateway/api/v1/write') }}"
+    tls:
+      ca_file: "/tls/prometheus/ca.crt"
+      crt_file: "/tls/prometheus/tls.crt"
+      key_file: "/tls/prometheus/tls.key"
+      verify_certificate: true
+      verify_hostname: true

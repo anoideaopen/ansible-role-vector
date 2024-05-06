@@ -1,0 +1,14 @@
+---
+vector_volume: []
+
+vector_volume_default:
+  - "{{ vector_etc }}:/etc/vector:ro"
+  - "{{ vector_tls }}:/tls:ro"
+  - "{{ vector_data }}:/var/lib/vector:rw"
+  - "{{ vector_home }}/entrypoint.sh:/entrypoint.sh:ro"
+
+vector_volume_docker:
+  - "/run/docker.sock:/var/run/docker.sock:rw"
+
+vector_publish_default:
+  - "{{ vector_publish_ip }}:{{ vector_publish_port }}:8686"

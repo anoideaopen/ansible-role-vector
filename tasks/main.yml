@@ -1,0 +1,8 @@
+---
+- name: "setup"
+  ansible.builtin.include_tasks: setup.yml
+  when: vector_purge != "yes"
+
+- name: "purge"
+  ansible.builtin.include_tasks: purge.yml
+  when: vector_purge == "yes"

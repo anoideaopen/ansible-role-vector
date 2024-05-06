@@ -1,0 +1,34 @@
+---
+vector_purge: "no"
+vector_log: "info"
+vector_image_name: "timberio/vector"
+vector_image_version: "0.36.0-debian"
+vector_image: "{{ vector_image_name }}:{{ vector_image_version }}"
+vector_home: "/opt/vector"
+vector_etc: "{{ vector_home }}/etc"
+vector_tls: "{{ vector_home }}/tls"
+vector_data: "{{ vector_home }}/data"
+vector_container_name: "{{ vector_home | basename }}"
+vector_tls_copy: "no"
+vector_tls_dirs:
+  - "loki"
+  - "prometheus"
+
+# check template specific variables in template file
+vector_publish_ip: "127.0.0.1"
+vector_publish_port: "8686"
+#vector_etc_hosts: {}
+vector_publish: []
+vector_cpus: "1"
+vector_memory: "256M"
+vector_template: "templates/etc/vector/default.yaml.j2"
+#vector_t_loki_endpoint: "https://localhost"
+
+# host - for server / default - for client
+vector_network_mode: "host"
+vector_recreate: "yes"
+vector_forward_docker: "yes"
+vector_forward_journald: "yes"
+vector_volume_custom: []
+vector_state: "started"
+vector_labels: {}

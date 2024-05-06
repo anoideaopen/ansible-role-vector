@@ -1,0 +1,29 @@
+namespace: anoideaopen_core
+
+name: vector
+
+version: null
+
+readme: README.md
+
+authors:
+- ANO Idea
+
+description: Role to setup vector daemon in docker with predefined templates
+
+license:
+- Apache-2.0
+
+tags:
+  - vector
+  - log
+
+dependencies: {}
+
+repository: https://github.com/anoideaopen/ansible-role-vector
+
+homepage: https://github.com/anoideaopen/ansible-role-vector
+
+issues: https://github.com/anoideaopen/ansible-role-vector/issues/
+
+build_ignore: []

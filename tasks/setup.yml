@@ -1,0 +1,109 @@
+---
+
+- name: "purge"
+  ansible.builtin.include_tasks: purge.yml
+  when: vector_purge == "yes"
+
+- name: "check docker image"
+  community.docker.docker_image:
+    name: "{{ vector_image }}"
+    state: present
+    source: pull
+
+- name: "setup directory"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+  loop:
+    - path: "{{ vector_home }}"
+      mode: "0750"
+      owner: "root"
+      group: "root"
+
+    - path: "{{ vector_etc }}"
+      mode: "0750"
+      owner: "root"
+      group: "root"
+
+    - path: "{{ vector_tls }}"
+      mode: "0750"
+      owner: "root"
+      group: "root"
+
+    - path: "{{ vector_data }}"
+      mode: "0750"
+      owner: "root"
+      group: "root"
+
+- name: "copy client tls"
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ vector_tls }}"
+    owner: root
+    group: root
+    mode: '0640'
+    directory_mode: '0750'
+  loop: "{{ vector_tls_dirs }}"
+  when: vector_tls_copy == "yes"
+
+- name: "systemd version"
+  ansible.builtin.raw: |
+    find /lib/systemd -maxdepth 1 -mindepth 1 -type f -name "libsystemd-shared-*.so" | head -n 1
+  changed_when: false
+  register: _systemd_version
+
+- name: "set volume journald"
+  ansible.builtin.set_fact:
+    vector_volume_journald:
+      - "/usr/bin/journalctl:/usr/bin/journalctl:ro"
+      - "/var/log/journal:/run/log/journal:ro"
+      - "{{ _systemd_version.stdout|trim }}:{{ _systemd_version.stdout|trim }}:ro"
+
+- name: "setup volume docker"
+  ansible.builtin.set_fact:
+    vector_volume: "{{ vector_volume + vector_volume_docker }}"
+  when: vector_forward_docker == "yes"
+
+- name: "setup volume journald"
+  ansible.builtin.set_fact:
+    vector_volume: "{{ vector_volume + vector_volume_journald }}"
+  when: vector_forward_journald == "yes"
+
+- name: "setup entrypoint.sh"
+  ansible.builtin.template:
+    src: "templates/entrypoint.sh.j2"
+    dest: "{{ vector_home }}/entrypoint.sh"
+    mode: "0755"
+    owner: "root"
+    group: "root"
+
+- name: "setup configuration"
+  ansible.builtin.template:
+    src: "{{ vector_template }}"
+    dest: "{{ vector_etc }}/vector.yaml"
+    mode: "0640"
+    owner: "root"
+    group: "root"
+
+- name: "run container"
+  community.docker.docker_container:
+    state: "{{ vector_state }}"
+    cpus: "{{ vector_cpus }}"
+    memory: "{{ vector_memory }}"
+    entrypoint: "/bin/bash"
+    command: "/entrypoint.sh"
+    restart_policy: unless-stopped
+    env:
+      VECTOR_LOG: "{{ vector_log }}"
+    image: "{{ vector_image }}"
+    network_mode: "{{ vector_network_mode }}"
+    recreate: "{{ vector_recreate }}"
+    name: "{{ vector_container_name }}"
+    etc_hosts: "{{ vector_etc_hosts|default(omit) }}"
+    detach: true
+    volumes: "{{ vector_volume_default + vector_volume + vector_volume_custom }}"
+    published_ports: "{{ (vector_network_mode == 'host') | ternary(omit, vector_publish_default + vector_publish) }}"
+    labels: "{{ vector_labels }}"

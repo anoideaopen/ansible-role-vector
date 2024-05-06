@@ -1,0 +1,19 @@
+---
+
+- name: "purge container"
+  community.docker.docker_container:
+    name: "{{ vector_container_name }}"
+    container_default_behavior: "no_defaults"
+    state: absent
+    force_kill: true
+
+- name: "purge working directory"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "absent"
+  loop:
+    - "{{ vector_data }}"
+    - "{{ vector_etc }}"
+    - "{{ vector_tls }}"
+    - "{{ vector_home }}"
+

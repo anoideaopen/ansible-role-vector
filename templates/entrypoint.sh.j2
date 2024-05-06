@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# workarround to fix docker daemon restart
+/usr/bin/vector --watch-config 2>&1 | while read line
+do
+        echo "$line"
+        if [[ "$line" = *"Error in communication with Docker daemon"* ]]
+        then
+                echo "restarting"
+                kill $(pidof vector)
+                exit 1
+        fi
+done
